@@ -1,0 +1,52 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: pronote_db
+    environment:
+      POSTGRES_USER: pronote
+      POSTGRES_PASSWORD: pronote
+      POSTGRES_DB: pronote_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pronote -d pronote_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: pronote_backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://pronote:pronote@db:5432/pronote_db
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: pronote_frontend
+    ports:
+      - "8501:8501"
+    depends_on:
+      - backend
+    volumes:
+      - .:/app
+    command: streamlit run frontend/app.py --server.address=0.0.0.0 --server.port=8501
+
+volumes:
+  postgres_data:
